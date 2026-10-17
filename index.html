@@ -418,8 +418,6 @@ function judge(know){
     if(!ses.wrong.includes(it.i)) ses.wrong.push(it.i);
     S.book[it.i] = t;
     S.due[it.i] = {stg:0, d:addDays(t,1)};
-    const maxA = MAX_ATT[it.kind]||2;
-    if(it.att < maxA-1){ ses.q.push({i:it.i, kind:it.kind, att:it.att+1, presented:true}); }
     card.classList.add('shake');
   }
   undoStack.push(rec);
@@ -436,7 +434,7 @@ function undo(){
   ses.pos = rec.pos;
   ses.yes = rec.yes; ses.no = rec.no;
   ses.wrong.length = rec.wrong;
-  ses.q.length = rec.qlen;   // 裁掉本次判断追加的折返卡
+  ses.q.length = rec.qlen;   // 兜底：恢复队列长度（V3.1 起答错不再追加卡片）
   if(rec.due) S.due[rec.i] = rec.due; else delete S.due[rec.i];
   if(rec.book) S.book[rec.i] = rec.book; else delete S.book[rec.i];
   if(rec.mastered) S.mastered[rec.i] = 1; else delete S.mastered[rec.i];
