@@ -129,7 +129,7 @@ textarea{width:100%;height:110px;border-radius:12px;background:#1e293b;color:#e5
     </div>
     <div class="panel">
       <h3>📅 今日任务</h3>
-      <div class="pbar-txt" style="margin-top:0"><span>待复习 <b id="hDue" style="color:#fbbf24">0</b> 词</span><span>新词 <b id="hNew" style="color:#a3e635">40</b> 词</span></div>
+      <div class="pbar-txt" style="margin-top:0"><span>待复习 <b id="hDue" style="color:#fbbf24">0</b> 词</span><span>新词 <b id="hNew" style="color:#a3e635">30</b> 词</span></div>
       <div class="pbar-txt"><span style="color:#94a3b8">每题4个选项选意思 · 选错立刻看答案 · 点错可撤销</span></div>
       <button class="btn primary block" id="startBtn" onclick="startSession()">▶ 开始今天的学习</button>
       <div class="grid2">
@@ -232,12 +232,12 @@ textarea{width:100%;height:110px;border-radius:12px;background:#1e293b;color:#e5
     <div class="panel" style="margin-top:12px">
       <h3>每天新词数量</h3>
       <select class="sel" id="setNew" onchange="setNewCount(this.value)">
-        <option value="30">30 个（轻松）</option>
-        <option value="40" selected>40 个（标准，20天拿下800）</option>
+        <option value="30" selected>30 个（标准，27天拿下800）</option>
+        <option value="40">40 个（冲刺，20天拿下800）</option>
         <option value="50">50 个（较快）</option>
         <option value="60">60 个（冲刺）</option>
       </select>
-      <div class="small-note">改成 40 个/天：20 天过完前800高频，40 天过完全部。</div>
+      <div class="small-note">默认每天 30 个新词 + 最多 30 个复习 ≈ 60 题，27 天过完前800高频。选 40 个/天则每天约 100 题，20 天过完前800。</div>
       <h3 style="margin-top:14px">备份进度</h3>
       <div class="small-note">担心换设备丢进度？导出这段文字存起来，新设备上导入即可。</div>
       <textarea id="bak" readonly placeholder="点击"导出"生成备份"></textarea>
@@ -262,9 +262,9 @@ const tstr = d => { const p=n=>String(n).padStart(2,'0'); return d.getFullYear()
 const TODAY = () => tstr(new Date());
 const addDays = (s,n) => { const d=new Date(s+'T00:00:00'); d.setDate(d.getDate()+n); return tstr(d); };
 
-function fresh(){ return {v:1,newCount:40,nextNew:0,mastered:{},due:{},book:{},day:0,streak:0,lastDone:null,hist:[]}; }
+function fresh(){ return {v:1,newCount:30,nextNew:0,mastered:{},due:{},book:{},day:0,streak:0,lastDone:null,hist:[]}; }
 let S = null;
-function load(){ try{ const x = JSON.parse(localStorage.getItem('zk1600')); if(x && x.v===1){ if(!Array.isArray(x.hist)) x.hist=[]; if(!x.mastered) x.mastered={}; if(!x.due) x.due={}; if(!x.book) x.book={}; return x; } }catch(e){} return fresh(); }
+function load(){ try{ const x = JSON.parse(localStorage.getItem('zk1600')); if(x && x.v===1){ if(!Array.isArray(x.hist)) x.hist=[]; if(!x.mastered) x.mastered={}; if(!x.due) x.due={}; if(!x.book) x.book={}; if(x.newCount===40 && !x.cfgMig1){ x.newCount=30; x.cfgMig1=true; localStorage.setItem('zk1600', JSON.stringify(x)); } return x; } }catch(e){} return fresh(); }
 function save(){ localStorage.setItem('zk1600', JSON.stringify(S)); }
 function reset(){ S = fresh(); save(); }
 
@@ -279,7 +279,7 @@ function buildSession(bonus){
   const t = TODAY();
   let q = [];
   const revIdx = Object.keys(S.due).filter(i=>S.due[i].d<=t)
-    .map(Number).sort((a,b)=>S.due[a].stg-S.due[b].stg).slice(0,60);
+    .map(Number).sort((a,b)=>S.due[a].stg-S.due[b].stg).slice(0,30);   // V3.2 复习封顶 30（新词 30/天）
   revIdx.forEach(i=>q.push({i,kind:'rev',att:0}));
   let nNew = 0;
   if(!bonus){
