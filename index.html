@@ -264,9 +264,12 @@ const addDays = (s,n) => { const d=new Date(s+'T00:00:00'); d.setDate(d.getDate(
 
 function fresh(){ return {v:1,newCount:30,nextNew:0,mastered:{},due:{},book:{},day:0,streak:0,lastDone:null,hist:[]}; }
 let S = null;
-function load(){ try{ const x = JSON.parse(localStorage.getItem('zk1600')); if(x && x.v===1){ if(!Array.isArray(x.hist)) x.hist=[]; if(!x.mastered) x.mastered={}; if(!x.due) x.due={}; if(!x.book) x.book={}; if(x.newCount===40 && !x.cfgMig1){ x.newCount=30; x.cfgMig1=true; localStorage.setItem('zk1600', JSON.stringify(x)); } return x; } }catch(e){} return fresh(); }
-function save(){ localStorage.setItem('zk1600', JSON.stringify(S)); }
-function reset(){ S = fresh(); save(); }
+function load(){ try{ const x = JSON.parse(localStorage.getItem('zk1600')); if(x && x.v===1){ if(!Array.isArray(x.hist)) x.hist=[]; if(!x.mastered) x.mastered={}; if(!x.due) x.due={}; if(!x.book) x.book={}; if(x.newCount===40 && !x.cfgMig1){ x.newCount=30; x.cfgMig1=true; localStorage.setItem('zk1600', JSON.stringify(x)); } try{ const sv = JSON.parse(localStorage.getItem('zk1600_ses') || 'null'); if(sv && sv.done !== true && Array.isArray(sv.q) && sv.q.length){ ses = sv; } }catch(e){} return x; } }catch(e){} return fresh(); }
+function save(){
+  localStorage.setItem('zk1600', JSON.stringify(S));
+  try{ if(ses && !ses.done && ses.q && ses.q.length){ localStorage.setItem('zk1600_ses', JSON.stringify(ses)); } else { localStorage.removeItem('zk1600_ses'); } }catch(e){}
+}
+function reset(){ S = fresh(); ses = null; save(); }
 
 // session
 let ses = null; // {q:[{i,kind,att}], pos:0, revN, newN, yes:0, no:0, done:false, bonus:false}
@@ -306,7 +309,9 @@ function renderHome(){
   const left = Math.max(0, WORDS.length - S.nextNew);
   $('hNew').textContent = Math.min(S.newCount, left);
   const t = TODAY();
-  if(S.lastDone === t){
+  if(ses && !ses.done){
+    $('startBtn').textContent = '▶ 继续上次学习（第'+(ses.pos+1)+'/'+ses.q.length+'词）';
+  } else if(S.lastDone === t){
     $('startBtn').textContent = '✅ 今日已完成 · 加练继续（不加打卡）';
   } else {
     $('startBtn').textContent = '▶ 开始今天的学习';
@@ -314,8 +319,10 @@ function renderHome(){
   if(left===0 && due===0 && S.lastDone===t) $('startBtn').textContent = '🎉 全部学完！复习生词本保持记忆';
 }
 
-function startSession(){ run(buildSession(false), false); }
+function startSession(){ if(ses && !ses.done){ resumeSession(); return; } run(buildSession(false), false); }
+function resumeSession(){ if(!ses || ses.done){ run(buildSession(false), false); return; } show('study'); renderCard(); }
 function startExtra(){
+  if(ses && !ses.done && !confirm('上次学习还没打完，继续加练会丢掉上次进度。确定继续吗？')){ return; }
   const pool = Object.keys(S.book).map(Number).filter(i=>!(S.mastered[i]));
   const t = TODAY();
   const first = pool.filter(i=>S.due[i] && S.due[i].d<=t);
@@ -454,14 +461,15 @@ function finish(){
   ses.done = true;
   const t = TODAY();
   const isFirst = S.lastDone !== t;
-  if(isFirst && ses.q.length>0){
+  const isCheckin = isFirst && ses.q.length>0 && !ses.bonus;
+  if(isCheckin){
     S.day++;
     S.streak = (S.lastDone === addDays(t,-1)) ? S.streak+1 : 1;
     S.lastDone = t;
   }
   S.hist.push({d:t, yes:ses.yes, no:ses.no, bonus:ses.bonus});
   save();
-  renderDone(isFirst && ses.q.length>0);
+  renderDone(isCheckin);
 }
 
 function renderDone(isCheckin){
@@ -482,7 +490,12 @@ function renderDone(isCheckin){
   show('done');
 }
 
-function quitSession(){ if(nextTimer){ clearTimeout(nextTimer); nextTimer=null; } ses = null; save(); renderHome(); go('home'); }
+function quitSession(){
+  if(nextTimer){ clearTimeout(nextTimer); nextTimer=null; }
+  if(ses && !ses.done && cardLocked){ next(); }
+  if(ses && ses.done){ return; }
+  save(); renderHome(); go('home');
+}
 
 function renderBook(){
   const rows = Object.keys(S.book).map(Number).filter(i=>!S.mastered[i]);
