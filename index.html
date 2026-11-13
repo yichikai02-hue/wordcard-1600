@@ -242,6 +242,7 @@ textarea{width:100%;height:110px;border-radius:12px;background:#1e293b;color:#e5
       <div class="small-note">担心换设备丢进度？导出这段文字存起来，新设备上导入即可。</div>
       <textarea id="bak" readonly placeholder="点击"导出"生成备份"></textarea>
       <button class="btn block" onclick="exportData()">⬇ 导出进度</button>
+      <button class="btn block" onclick="copyProgressLink()">📋 复制进度链接（发微信存档，不怕清零）</button>
       <textarea id="imp" placeholder="把备份文字粘贴到这里，再点导入"></textarea>
       <button class="btn block" onclick="importData()">⬆ 导入进度</button>
       <h3 style="margin-top:14px;color:#f87171">危险区</h3>
@@ -271,6 +272,64 @@ function save(){
 }
 function reset(){ S = fresh(); ses = null; save(); }
 
+// V3.4 恢复链接(?r=) 与 进度链接（进度跟着链接走，不怕微信清零）
+function b64d(c){ c = c.replace(/-/g,'+').replace(/_/g,'/'); while(c.length%4) c+='='; return atob(c); }
+function b64e(s){ return btoa(unescape(encodeURIComponent(s))).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,''); }
+function restoreCompact(c){
+  try{
+    const j = JSON.parse(b64d(c));
+    if(!j || typeof j.n!=='number' || !Array.isArray(j.b)) return null;
+    const t = TODAY();
+    const S2 = fresh();
+    S2.cfgMig1 = true;
+    S2.nextNew = Math.max(0, Math.min(CORE_N, Math.floor(j.n)));
+    S2.day = Math.max(0, Math.floor(j.d||0));
+    S2.streak = Math.max(0, Math.floor(j.s||0));
+    S2.lastDone = (j.l && /^\d{4}-\d{2}-\d{2}$/.test(j.l)) ? j.l : null;
+    j.b.forEach(i=>{ i = Math.floor(i); if(i>=0 && i<WORDS.length){ S2.book[i]=t; S2.due[i]={stg:0,d:t}; } });
+    return S2;
+  }catch(e){ return null; }
+}
+function tryRestoreURL(){
+  try{
+    const u = new URL(location.href);
+    const c = u.searchParams.get('r');
+    if(!c) return false;
+    const S2 = restoreCompact(c);
+    if(!S2){ alert('恢复码无效'); }
+    else if(confirm('检测到哥哥发的恢复进度，是否恢复？\n（会覆盖本机当前进度）')){
+      S = S2; ses = null; save();
+      alert('✅ 恢复成功！从 DAY '+S.day+' 继续');
+    }
+    history.replaceState(null,'',location.pathname);
+    return true;
+  }catch(e){ return false; }
+}
+function progressLink(){
+  const j = {n:S.nextNew, d:S.day, s:S.streak, l:S.lastDone, b:Object.keys(S.book).map(Number).filter(i=>!S.mastered[i])};
+  return location.origin + location.pathname + '?r=' + b64e(JSON.stringify(j));
+}
+function copyProgressLink(){
+  const link = progressLink();
+  const ok = function(){ alert('✅ 进度链接已复制！去微信粘贴发给你哥存档。\n\n（若没复制上，长按全选这段链接再复制）\n\n'+link); };
+  try{
+    if(navigator.clipboard && navigator.clipboard.writeText){
+      navigator.clipboard.writeText(link).then(ok, function(){ prompt('手动复制这段链接：', link); });
+      return;
+    }
+  }catch(e){}
+  prompt('手动复制这段链接：', link);
+}
+let wxWarnDone = false;
+function wxWarn(){
+  if(wxWarnDone) return; wxWarnDone = true;
+  if(!/MicroMessenger/i.test(navigator.userAgent)) return;
+  const t = document.createElement('div');
+  t.style.cssText = 'background:#fff7ed;border:1px solid #fbbf24;border-radius:10px;padding:10px 12px;margin:10px 0;color:#92400e;font-size:14px;';
+  t.textContent = '⚠️ 你是在微信里打开的：刷完后记得点页面底部的「复制进度链接」发给哥哥存档，不然明天可能从头开始。';
+  $('home').insertBefore(t, $('home').firstChild);
+}
+
 // session
 let ses = null; // {q:[{i,kind,att}], pos:0, revN, newN, yes:0, no:0, done:false, bonus:false}
 let undoStack = [];
@@ -296,6 +355,7 @@ function show(id){ ['home','study','done','book','report','settings'].forEach(x=
 function go(id){ show(id); }
 
 function renderHome(){
+  wxWarn();
   $('totalN').textContent = CORE_N;
   $('hStreak').textContent = S.streak;
   const m = Object.keys(S.mastered).length;
@@ -487,6 +547,7 @@ function renderDone(isCheckin){
   $('dWrong').innerHTML = wrongUniq.length===0 ? '<div class="small-note">今天没有答错的词，厉害！🎉</div>'
     : wrongUniq.slice(0,15).map(i=>'<div class="wl"><div class="en">'+WORDS[i].w+'</div><div class="zh">'+cleanDef(i)+'</div></div>').join('');
   $('dWrongMore').textContent = wrongUniq.length>15 ? '（还有 '+(wrongUniq.length-15)+' 个没显示，完整名单在生词本）' : '';
+  const lb = $('dLinkBtn'); if(lb) lb.style.display = 'block';
   show('done');
 }
 
@@ -661,6 +722,8 @@ function renderCatReport(){
 
 // boot
 S = load();
+tryRestoreURL();
+(function(){ const d=document.createElement('button'); d.id='dLinkBtn'; d.className='btn block'; d.style.display='none'; d.textContent='📋 复制进度链接，发给哥哥存档'; d.onclick=copyProgressLink; $('done').appendChild(d); })();
 show('home');
 // test hooks
 window.APP = { getState:()=>S, setState:x=>{S=x;save();}, words:WORDS, buildSession, startSession, startExtra, judge, pick, afterWrong, finish, renderCard, curItem:()=>ses?{i:ses.q[ses.pos].i,kind:ses.q[ses.pos].kind,pos:ses.pos,qlen:ses.q.length}:null, optOrder:()=>optOrder.slice(), sesGet:()=>ses };
